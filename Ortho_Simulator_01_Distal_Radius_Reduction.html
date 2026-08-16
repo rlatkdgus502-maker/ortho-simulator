@@ -1,283 +1,424 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Distal Radius Fracture Reduction Simulator</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Distal Radius Manual Reduction Trainer</title>
 <style>
-  body { font-family: Arial, "Noto Sans KR", sans-serif; margin:0; background:#f4f6f8; color:#1f2937; }
-  header { background:#111827; color:white; padding:16px 22px; }
-  h1 { margin:0; font-size:22px; }
-  .wrap { display:grid; grid-template-columns: 1.3fr 1fr; gap:16px; padding:16px; }
-  .panel { background:white; border-radius:12px; padding:16px; box-shadow:0 2px 10px rgba(0,0,0,.07); }
-  canvas { width:100%; height:auto; background:#fbfbfb; border:1px solid #d1d5db; border-radius:8px; }
-  .views { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-  .controls { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-  label { display:block; font-size:13px; margin-bottom:4px; font-weight:600; }
-  input[type=range] { width:100%; }
-  .metric { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee; }
-  .score { font-size:28px; font-weight:700; margin-top:12px; }
-  .good { color:#15803d; } .mid { color:#b45309; } .bad { color:#b91c1c; }
-  button { padding:10px 14px; border:none; border-radius:8px; cursor:pointer; font-weight:600; }
-  .primary { background:#2563eb; color:white; }
-  .secondary { background:#e5e7eb; color:#111827; }
-  .tip { font-size:13px; line-height:1.5; color:#4b5563; }
-  .full { grid-column:1 / -1; }
+body{margin:0;font-family:Arial,"Noto Sans KR",sans-serif;background:#f4f6f8;color:#1f2937}
+header{background:#111827;color:#fff;padding:16px 22px}h1{margin:0;font-size:22px}
+main{max-width:1320px;margin:auto;padding:16px}
+.panel{background:#fff;border-radius:14px;padding:16px;box-shadow:0 2px 10px #00000012;margin-bottom:16px}
+.topgrid{display:grid;grid-template-columns:1.5fr .7fr;gap:16px}
+.views{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+canvas.xray{width:100%;height:auto;background:#fafafa;border:1px solid #d1d5db;border-radius:10px}
+.common{margin:14px 0;padding:14px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px}
+label{font-size:13px;font-weight:700}input[type=range]{width:100%}
+.trainer{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.padwrap{text-align:center}.pad{touch-action:none;width:min(100%,390px);aspect-ratio:1;background:#f8fafc;border:1px solid #cbd5e1;border-radius:16px;cursor:crosshair}
+.help{font-size:12px;color:#64748b;line-height:1.5}.metric{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #eee}
+button{padding:10px 14px;border:0;border-radius:8px;font-weight:700;cursor:pointer;margin:4px}
+.primary{background:#2563eb;color:#fff}.secondary{background:#e5e7eb}
+.score{font-size:26px;font-weight:800;margin-top:12px}.good{color:#15803d}.mid{color:#b45309}.bad{color:#b91c1c}
+.classbox{background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:14px;margin-bottom:12px}
+.classbox h3{margin:0 0 12px}.label{font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.value{font-size:18px;font-weight:800;margin:3px 0 10px}.tag{display:inline-block;background:#eef2ff;color:#3730a3;border-radius:999px;padding:5px 9px;font-size:12px;font-weight:700;margin:2px 4px 2px 0}
+.note{font-size:12px;line-height:1.45;color:#475569}
+@media(max-width:1000px){.topgrid,.views,.trainer{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-<header>
-  <h1>Distal Radius Fracture Manual Reduction Simulator</h1>
-</header>
+<header><h1>Distal Radius Fracture — Manual Reduction Trainer</h1></header>
+<main>
 
-<div class="wrap">
-  <div class="panel">
-    <div class="views">
-      <div>
-        <h3>AP View</h3>
-        <canvas id="ap" width="520" height="520"></canvas>
-      </div>
-      <div>
-        <h3>Lateral View</h3>
-        <canvas id="lat" width="520" height="520"></canvas>
-      </div>
-    </div>
-    <p class="tip">
-      목표: 먼저 shortening을 줄여 disimpaction한 뒤, translation과 angulation을 교정하십시오.
-      단순 wrist flexion만으로는 좋은 score가 나오지 않도록 설계했습니다.
-    </p>
+<div class="topgrid">
+<div class="panel">
+ <div class="views">
+  <div><h3>AP View</h3><canvas class="xray" id="ap" width="520" height="430"></canvas></div>
+  <div><h3>Lateral View</h3><canvas class="xray" id="lat" width="520" height="430"></canvas></div>
+ </div>
+
+ <div class="common">
+  <label>1. Traction / Disimpaction: <span id="tractionText">-6.0</span> mm</label>
+  <input id="traction" type="range" min="-10" max="10" step="0.5" value="-6">
+  <div class="help">Negative = collapse/impaction · Positive = longitudinal traction/disimpaction. 처음에는 shortening된 상태에서 시작합니다.</div>
+  <div class="help">먼저 longitudinal traction으로 impacted fragment를 disimpact합니다. AP와 lateral projection이 동시에 변합니다.</div>
+ </div>
+
+ <div class="trainer">
+  <div class="padwrap">
+   <h3>2. Fragment Translation</h3>
+   <canvas class="pad" id="movePad" width="390" height="390"></canvas>
+   <div class="help">조이스틱 방향 = distal fragment가 실제로 이동하는 방향입니다. 좌=ULNAR, 우=RADIAL (AP plane, ±5 mm), 상=DORSAL, 하=VOLAR (lateral plane, ±12 mm). X/Y가 독립적이므로 정사각형 꼭짓점까지 이동할 수 있고 두 방향의 최대 manipulation을 동시에 적용할 수 있습니다.</div>
   </div>
-
-  <div class="panel">
-    <h3>Reduction Maneuver</h3>
-    <div class="controls">
-      <div>
-        <label>Traction / Length restoration: <span id="tractionVal"></span> mm</label>
-        <input id="traction" type="range" min="0" max="12" step="0.5" value="0">
-      </div>
-      <div>
-        <label>Radial-Ulnar translation: <span id="apTransVal"></span> mm</label>
-        <input id="apTrans" type="range" min="-10" max="10" step="0.5" value="0">
-      </div>
-      <div>
-        <label>Volar-Dorsal translation: <span id="latTransVal"></span> mm</label>
-        <input id="latTrans" type="range" min="-10" max="10" step="0.5" value="0">
-      </div>
-      <div>
-        <label>Volar tilt correction: <span id="tiltVal"></span>°</label>
-        <input id="tilt" type="range" min="-35" max="25" step="1" value="0">
-      </div>
-      <div>
-        <label>Radial inclination correction: <span id="riVal"></span>°</label>
-        <input id="ri" type="range" min="-15" max="20" step="1" value="0">
-      </div>
-      <div>
-        <label>3-point molding force: <span id="moldVal"></span>%</label>
-        <input id="mold" type="range" min="0" max="100" step="5" value="0">
-      </div>
-    </div>
-
-    <div style="margin-top:16px;">
-      <button class="primary" onclick="evaluateReduction()">Evaluate reduction</button>
-      <button class="secondary" onclick="resetSim()">Reset</button>
-      <button class="secondary" onclick="randomizeFracture()">Random fracture</button>
-    </div>
-
-    <h3 style="margin-top:20px;">Current Parameters</h3>
-    <div class="metric"><span>Radial height</span><strong id="rh"></strong></div>
-    <div class="metric"><span>Radial inclination</span><strong id="riMetric"></strong></div>
-    <div class="metric"><span>Volar tilt</span><strong id="vt"></strong></div>
-    <div class="metric"><span>AP translation</span><strong id="apt"></strong></div>
-    <div class="metric"><span>Lateral translation</span><strong id="ltt"></strong></div>
-
-    <div id="scoreBox" class="score bad">Not evaluated</div>
-    <div id="feedback" class="tip" style="margin-top:8px;"></div>
+  <div class="padwrap">
+   <h3>3. Fragment Angulation</h3>
+   <canvas class="pad" id="anglePad" width="390" height="390"></canvas>
+   <div class="help">좌/우 = ulnar/radial inclination correction, 상/하 = dorsal/volar tilt correction.</div>
   </div>
+ </div>
 
-  <div class="panel full">
-    <h3>교육용 기준</h3>
-    <div class="tip">
-      이 simulator는 실제 환자 진료용 의사결정 도구가 아니라 reduction 원리를 학습하기 위한 모델입니다.
-      목표 범위는 대략 radial height ≥ 10 mm, radial inclination 18–25°, volar tilt 약 0–15°를 중심으로 설정했습니다.
-      fracture pattern, age, intra-articular involvement 등에 따라 실제 acceptable criteria는 달라질 수 있습니다.
-    </div>
-  </div>
+ <div class="common">
+  <label>4. 3-point molding: <span id="moldText">0</span>%</label>
+  <input id="mold" type="range" min="0" max="100" value="0">
+  <div class="help">Molding을 올리면 양쪽 projection에 pressure arrow가 표시됩니다.</div>
+ </div>
 </div>
 
+<div class="panel">
+ <div class="classbox">
+   <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;"><h3 style="margin:0;">Fracture Pattern</h3><button class="secondary" onclick="randomCase()" style="margin:0;">Random fracture</button></div>
+   <div class="label">AO/OTA classification</div>
+   <div id="aoClass" class="value">23-A2</div>
+
+   <div class="label">Common terminology</div>
+   <div id="commonName" class="value">Colles-type fracture</div>
+
+   <div id="patternTags"></div>
+   <div id="patternDesc" class="note" style="margin-top:10px;"></div>
+ </div>
+
+ <div class="classbox">
+   <div class="label">Teaching note</div>
+   <div class="note">
+   AO/OTA와 eponym은 서로 1:1 대응하지 않습니다. 예를 들어 Colles/Smith는 주로 displacement pattern을 표현하고,
+   Barton/Volar Barton은 rim을 포함하는 intra-articular fracture-dislocation pattern을 표현합니다.
+   </div>
+ </div>
+</div>
+</div>
+
+<div class="panel">
+ <div class="trainer">
+  <div>
+   <h3>Reduction parameters</h3>
+   <div class="metric"><span>Radial height</span><b id="rh"></b></div>
+   <div class="metric"><span>Radial inclination</span><b id="ri"></b></div>
+   <div class="metric"><span>Volar tilt</span><b id="vt"></b></div>
+   <div class="metric"><span>Residual AP translation</span><b id="apt"></b></div>
+   <div class="metric"><span>Residual lateral translation</span><b id="ltt"></b></div>
+   <div class="help" style="margin-top:8px;">Typical Colles pattern: sagittal displacement/tilt and shortening are emphasized; AP translation is comparatively smaller.</div>
+  </div>
+  <div>
+   <button class="primary" onclick="evaluateReduction()">Evaluate</button>
+   <button class="secondary" onclick="resetReduction()">Reset reduction</button>
+   <button class="secondary" onclick="randomCase()">Random fracture</button>
+   <div id="score" class="score bad">Not evaluated</div>
+   <div id="feedback" class="help"></div>
+  </div>
+ </div>
+</div>
+
+<div class="panel help">
+<b>교육용 prototype.</b> 실제 환자의 acceptable reduction criteria 또는 치료 방침을 결정하기 위한 clinical decision-support tool이 아닙니다.
+</div>
+</main>
+
 <script>
-let fx = {
-  shortening: 8,
-  apTranslation: 5,
-  latTranslation: 6,
-  dorsalTilt: 25,
-  lossRI: 10
-};
+const patterns=[
+ {
+   ao:"23-A2",
+   name:"Colles-type fracture",
+   tags:["Extra-articular","Dorsal angulation","Dorsal displacement","Shortening"],
+   desc:"Typical extra-articular Colles pattern. AP-plane translation is usually modest, while dorsal displacement/tilt and radial shortening dominate the deformity.",
+   fx:{short:8.0,ap:2.0,lat:8.0,dorsal:28,lossRI:9}
+ },
+ {
+   ao:"23-A2",
+   name:"Smith-type fracture",
+   tags:["Extra-articular","Volar angulation","Reverse Colles"],
+   desc:"Extra-articular fracture with volar displacement/tilt. As with Colles, sagittal-plane deformity is emphasized more than AP-plane translation.",
+   fx:{short:6.0,ap:-1.5,lat:-7.0,dorsal:-22,lossRI:7}
+ },
+ {
+   ao:"23-B1",
+   name:"Chauffeur fracture",
+   tags:["Partial articular","Radial styloid","Hutchinson fracture"],
+   desc:"Partial-articular radial styloid fracture. AP-plane abnormality is more prominent than in a typical Colles pattern.",
+   fx:{short:3.5,ap:5.0,lat:2.5,dorsal:6,lossRI:14}
+ },
+ {
+   ao:"23-B2",
+   name:"Dorsal Barton fracture",
+   tags:["Partial articular","Dorsal rim","Radiocarpal subluxation pattern"],
+   desc:"Dorsal rim intra-articular fracture with dorsal radiocarpal displacement/subluxation tendency. Sagittal displacement is intentionally prominent in this training model.",
+   fx:{short:5.0,ap:2.0,lat:9.0,dorsal:30,lossRI:8}
+ },
+ {
+   ao:"23-B3",
+   name:"Volar Barton fracture",
+   tags:["Partial articular","Volar rim","Radiocarpal subluxation pattern"],
+   desc:"Volar rim intra-articular fracture with volar displacement/subluxation tendency. Sagittal deformity is emphasized.",
+   fx:{short:5.0,ap:-1.5,lat:-9.0,dorsal:-28,lossRI:7}
+ },
+ {
+   ao:"23-C1",
+   name:"Complete articular distal radius fracture",
+   tags:["Complete articular","Simple articular","Metaphyseal component"],
+   desc:"Complete-articular distal radius fracture. The real fracture mechanics are more complex than this simplified two-fragment model.",
+   fx:{short:8.5,ap:3.0,lat:7.0,dorsal:22,lossRI:11}
+ }
+];
 
-const els = {};
-["traction","apTrans","latTrans","tilt","ri","mold"].forEach(id=>els[id]=document.getElementById(id));
+let currentPattern=0;
+let fx={...patterns[0].fx};
+let move={x:0,y:0}, ang={x:0,y:0};
+const traction=document.getElementById("traction"), mold=document.getElementById("mold");
 
-function getState(){
-  const traction = +els.traction.value;
-  const apCorr = +els.apTrans.value;
-  const latCorr = +els.latTrans.value;
-  const tiltCorr = +els.tilt.value;
-  const riCorr = +els.ri.value;
-
-  return {
-    radialHeight: 11 - Math.max(0, fx.shortening - traction),
-    radialInclination: 22 - fx.lossRI + riCorr,
-    volarTilt: 11 - fx.dorsalTilt + tiltCorr,
-    apTranslation: fx.apTranslation - apCorr,
-    latTranslation: fx.latTranslation - latCorr,
-    mold: +els.mold.value
-  };
+function updatePatternInfo(){
+ const p=patterns[currentPattern];
+ document.getElementById("aoClass").textContent=p.ao;
+ document.getElementById("commonName").textContent=p.name;
+ document.getElementById("patternTags").innerHTML=p.tags.map(t=>`<span class="tag">${t}</span>`).join("");
+ document.getElementById("patternDesc").textContent=p.desc;
 }
 
-function updateLabels(){
-  document.getElementById("tractionVal").textContent = els.traction.value;
-  document.getElementById("apTransVal").textContent = els.apTrans.value;
-  document.getElementById("latTransVal").textContent = els.latTrans.value;
-  document.getElementById("tiltVal").textContent = els.tilt.value;
-  document.getElementById("riVal").textContent = els.ri.value;
-  document.getElementById("moldVal").textContent = els.mold.value;
+function state(){
+ const tractionMm=+traction.value;
+ const m=+mold.value/100;
 
-  const s = getState();
-  document.getElementById("rh").textContent = s.radialHeight.toFixed(1) + " mm";
-  document.getElementById("riMetric").textContent = s.radialInclination.toFixed(1) + "°";
-  document.getElementById("vt").textContent = s.volarTilt.toFixed(1) + "°";
-  document.getElementById("apt").textContent = s.apTranslation.toFixed(1) + " mm";
-  document.getElementById("ltt").textContent = s.latTranslation.toFixed(1) + " mm";
+ const baseHeight=Math.max(2,11-fx.short);
+ const tractionEffect=(tractionMm+6)*0.65;
+
+ return {
+   height:Math.max(1.5,Math.min(12,baseHeight+tractionEffect)),
+   ap:fx.ap+move.x*5,
+   lat:fx.lat+move.y*12-m*0.8,
+   ri:22-fx.lossRI+ang.x*18,
+   vt:11-fx.dorsal-ang.y*32+m*1.5,
+   mold:m,
+   tractionMm:tractionMm
+ };
 }
-
-function drawBone(ctx, view){
-  ctx.clearRect(0,0,520,520);
-  ctx.save();
-  ctx.translate(260,40);
-
-  ctx.strokeStyle="#374151";
-  ctx.lineWidth=18;
-  ctx.lineCap="round";
-
-  // proximal shaft
-  ctx.beginPath();
-  ctx.moveTo(view==="ap" ? -35 : 0, 20);
-  ctx.lineTo(view==="ap" ? -35 : 0, 280);
-  ctx.stroke();
-
-  const s = getState();
-
-  let dx=0, angle=0;
-  if(view==="ap"){
-    dx = s.apTranslation * 6;
-    angle = -(s.radialInclination-22) * Math.PI/180 * 0.9;
-  } else {
-    dx = s.latTranslation * 6;
-    angle = -(s.volarTilt-11) * Math.PI/180 * 0.9;
-  }
-
-  const lengthGain = (s.radialHeight - 3) * 4;
-  ctx.save();
-  ctx.translate(dx, 285 + (32-lengthGain));
-  ctx.rotate(angle);
-
-  ctx.strokeStyle="#9ca3af";
-  ctx.lineWidth=20;
-  ctx.beginPath();
-  ctx.moveTo(0,0);
-  ctx.lineTo(0,120);
-  ctx.stroke();
-
-  ctx.fillStyle="#d1d5db";
-  ctx.beginPath();
-  ctx.ellipse(0,130,48,28,0,0,Math.PI*2);
-  ctx.fill();
-
-  ctx.restore();
-
-  // fracture line
-  ctx.strokeStyle="#ef4444";
-  ctx.lineWidth=3;
-  ctx.beginPath();
-  ctx.moveTo(-55,285);
-  ctx.lineTo(55,285);
-  ctx.stroke();
-
-  ctx.fillStyle="#111827";
-  ctx.font="14px Arial";
-  ctx.fillText(view==="ap" ? "AP" : "Lateral", -230, 430);
-  ctx.restore();
+function arrow(c,x1,y1,x2,y2,w=3){
+ let a=Math.atan2(y2-y1,x2-x1),h=10;
+ c.strokeStyle="#2563eb";c.fillStyle="#2563eb";c.lineWidth=w;
+ c.beginPath();c.moveTo(x1,y1);c.lineTo(x2,y2);c.stroke();
+ c.beginPath();c.moveTo(x2,y2);c.lineTo(x2-h*Math.cos(a-.5),y2-h*Math.sin(a-.5));c.lineTo(x2-h*Math.cos(a+.5),y2-h*Math.sin(a+.5));c.closePath();c.fill();
 }
+function drawXray(id,view){
+ const c=document.getElementById(id).getContext("2d"),s=state();
+ c.clearRect(0,0,520,430); c.save(); c.translate(260,0);
+ c.lineCap="round";
 
-function drawAll(){
-  drawBone(document.getElementById("ap").getContext("2d"),"ap");
-  drawBone(document.getElementById("lat").getContext("2d"),"lat");
-  updateLabels();
+ // AP = broader radius silhouette, lateral = slimmer projection
+ const shaftWidth = view==="ap" ? 28 : 15;
+ const fragmentWidth = view==="ap" ? 30 : 16;
+ const headRx = view==="ap" ? 58 : 34;
+ const headRy = view==="ap" ? 27 : 22;
+
+ // Anatomical orientation for reduction training:
+ // hand/distal fragment at TOP, proximal radius shaft at BOTTOM.
+ c.strokeStyle="#374151";c.lineWidth=shaftWidth;
+ c.beginPath();
+ c.moveTo(view==="ap"?-28:0,405);
+ c.lineTo(view==="ap"?-28:0,205);
+ c.stroke();
+
+ let dx=view==="ap"?s.ap*6:s.lat*6;
+ let angle=view==="ap"?-(s.ri-22)*Math.PI/180:-(s.vt-11)*Math.PI/180;
+
+ // More restored radial height moves the distal fragment farther distally (upward on screen).
+ let y=175-(s.height-3)*5;
+
+ c.save();
+ c.translate(dx,y);
+ c.rotate(angle);
+
+ // Distal radial segment extends upward toward the hand.
+ c.strokeStyle="#9ca3af";c.lineWidth=fragmentWidth;
+ c.beginPath();c.moveTo(0,0);c.lineTo(0,-82);c.stroke();
+
+ // Simplified distal radius / wrist end
+ c.fillStyle="#d1d5db";
+ c.beginPath();c.ellipse(0,-94,headRx,headRy,0,0,Math.PI*2);c.fill();
+
+ // Simple hand block to make orientation intuitive
+ c.fillStyle="#e5e7eb";
+ c.fillRect(-headRx*0.72,-158,headRx*1.44,48);
+ c.restore();
+
+ // fracture line
+ c.strokeStyle="#ef4444";c.lineWidth=3;
+ c.beginPath();
+ c.moveTo(view==="ap"?-70:-45,200);
+ c.lineTo(view==="ap"?70:45,200);
+ c.stroke();
+
+ // Traction pulls the hand/distal fragment away from the proximal radius: upward on screen
+ if(+traction.value>0){
+   let w=2+(+traction.value)/5;
+   arrow(c,-80,145,-80,92,w);
+   arrow(c,80,145,80,92,w);
+ }
+
+ // Molding force arrows, mirrored to the new orientation
+ if(+mold.value>0){
+   let w=2+(+mold.value)/35;
+   if(view==="lat"){
+     arrow(c,125,150,60,150,w);
+     arrow(c,-125,215,-60,215,w);
+     arrow(c,-125,92,-60,92,w);
+   }else{
+     arrow(c,135,150,75,150,w);
+     arrow(c,-135,150,-75,150,w);
+   }
+ }
+
+ // Orientation labels
+ c.fillStyle="#64748b";
+ c.font="12px Arial";
+ c.textAlign="left";
+ c.fillText("HAND / DISTAL", -245,18);
+ c.fillText("PROXIMAL RADIUS", -245,420);
+
+ c.save();
+ c.font="bold 12px Arial";
+ c.textAlign="center";
+ c.fillStyle="#475569";
+
+ if(view==="ap"){
+   c.fillText("RADIAL", 190,210);
+   c.fillText("ULNAR", -190,210);
+   c.fillText("DISTAL", 0,45);
+   c.fillText("PROXIMAL", 0,395);
+
+   c.strokeStyle="#94a3b8"; c.lineWidth=1.5;
+   c.beginPath();
+   c.moveTo(-150,220); c.lineTo(150,220);
+   c.moveTo(0,70); c.lineTo(0,370);
+   c.stroke();
+ }else{
+   c.fillText("DORSAL", 190,210);
+   c.fillText("VOLAR", -190,210);
+   c.fillText("DISTAL", 0,45);
+   c.fillText("PROXIMAL", 0,395);
+
+   c.strokeStyle="#94a3b8"; c.lineWidth=1.5;
+   c.beginPath();
+   c.moveTo(-150,220); c.lineTo(150,220);
+   c.moveTo(0,70); c.lineTo(0,370);
+   c.stroke();
+ }
+ c.restore();
+
+ c.restore();
 }
+function drawPad(id,type){
+ const canvas=document.getElementById(id),c=canvas.getContext("2d"),p=type==="move"?move:ang;
+ c.clearRect(0,0,390,390);
 
-function evaluateReduction(){
-  const s = getState();
-  let score=100;
-  score -= Math.min(35, Math.abs(Math.min(0, s.radialHeight-10))*12);
-  score -= Math.min(20, Math.abs(s.radialInclination-22)*2);
-  score -= Math.min(25, Math.abs(s.volarTilt-11)*1.5);
-  score -= Math.min(10, Math.abs(s.apTranslation)*2);
-  score -= Math.min(10, Math.abs(s.latTranslation)*2);
+ // Usable joystick range: square, so diagonal corners represent x=±1 and y=±1 simultaneously.
+ c.strokeStyle="#94a3b8";
+ c.lineWidth=2;
+ c.strokeRect(45,45,300,300);
 
-  // reward appropriate molding, penalize under/over molding
-  score -= Math.abs(s.mold-55)*0.12;
-  score = Math.max(0, Math.round(score));
-
-  const box=document.getElementById("scoreBox");
-  const fb=document.getElementById("feedback");
-
-  if(score>=85){
-    box.className="score good";
-    box.textContent="Excellent: "+score+"/100";
-  } else if(score>=70){
-    box.className="score mid";
-    box.textContent="Acceptable: "+score+"/100";
-  } else {
-    box.className="score bad";
-    box.textContent="Needs correction: "+score+"/100";
-  }
-
-  let msgs=[];
-  if(s.radialHeight<10) msgs.push("Residual shortening: traction/disimpaction이 부족합니다.");
-  if(s.radialInclination<18) msgs.push("Radial inclination이 부족합니다.");
-  if(s.radialInclination>25) msgs.push("Radial inclination이 과교정되었습니다.");
-  if(s.volarTilt<0) msgs.push("Residual dorsal tilt가 남아 있습니다.");
-  if(s.volarTilt>15) msgs.push("Volar tilt가 과교정되었습니다.");
-  if(Math.abs(s.apTranslation)>3) msgs.push("AP translation이 남아 있습니다.");
-  if(Math.abs(s.latTranslation)>3) msgs.push("Lateral translation이 남아 있습니다.");
-  if(s.mold<35) msgs.push("Molding이 부족합니다.");
-  if(s.mold>80) msgs.push("과도한 molding pressure를 피하십시오.");
-  if(msgs.length===0) msgs.push("Alignment와 molding이 교육용 목표 범위에 들어왔습니다.");
-  fb.textContent=msgs.join(" ");
+ c.strokeStyle="#cbd5e1";
+ c.lineWidth=2;
+ c.beginPath();
+ c.moveTo(195,45);c.lineTo(195,345);
+ c.moveTo(45,195);c.lineTo(345,195);
+ c.stroke();
+ c.fillStyle="#64748b";c.font="12px Arial";c.textAlign="center";
+ if(type==="move"){
+  c.fillText("DORSAL  (+12 mm)",195,25);
+  c.fillText("VOLAR  (-12 mm)",195,378);
+  c.fillText("ULNAR  (-5 mm)",47,185);
+  c.fillText("RADIAL  (+5 mm)",343,185);
+ }else{
+  c.fillText("DORSAL TILT",195,15);c.fillText("VOLAR TILT",195,385);c.fillText("ULNAR",35,185);c.fillText("RADIAL",350,185);
+ }
+ let x=195+p.x*150,y=195+p.y*150;
+ c.strokeStyle="#2563eb";c.lineWidth=3;c.beginPath();c.moveTo(195,195);c.lineTo(x,y);c.stroke();
+ c.fillStyle="#2563eb";c.beginPath();c.arc(x,y,15,0,Math.PI*2);c.fill();
 }
+function bindPad(id,obj){
+ const cv=document.getElementById(id);
+ function set(e){
+  const r=cv.getBoundingClientRect(),sx=390/r.width,sy=390/r.height;
+  let x=(e.clientX-r.left)*sx,y=(e.clientY-r.top)*sy;
+  let dx=(x-195)/150;
+  let dy=(y-195)/150;
 
-function resetSim(){
-  els.traction.value=0;
-  els.apTrans.value=0;
-  els.latTrans.value=0;
-  els.tilt.value=0;
-  els.ri.value=0;
-  els.mold.value=0;
-  document.getElementById("scoreBox").className="score bad";
-  document.getElementById("scoreBox").textContent="Not evaluated";
-  document.getElementById("feedback").textContent="";
+  // Square 2D joystick:
+  // X and Y are clamped independently, so the four corners are reachable.
+  // This allows simultaneous maximal AP and lateral manipulation.
+  dx=Math.max(-1,Math.min(1,dx));
+  dy=Math.max(-1,Math.min(1,dy));
+
+  obj.x=dx;
+  obj.y=dy;
   drawAll();
+ }
+ let down=false;
+ cv.addEventListener("pointerdown",e=>{down=true;cv.setPointerCapture(e.pointerId);set(e)});
+ cv.addEventListener("pointermove",e=>{if(down)set(e)});
+ cv.addEventListener("pointerup",()=>down=false);
+ cv.addEventListener("dblclick",()=>{obj.x=0;obj.y=0;drawAll()});
 }
-
-function randomizeFracture(){
-  fx.shortening = 5 + Math.random()*5;
-  fx.apTranslation = -7 + Math.random()*14;
-  fx.latTranslation = 3 + Math.random()*7;
-  fx.dorsalTilt = 15 + Math.random()*20;
-  fx.lossRI = 6 + Math.random()*10;
-  resetSim();
+function drawAll(){
+ drawXray("ap","ap");drawXray("lat","lat");drawPad("movePad","move");drawPad("anglePad","ang");
+ const s=state();
+ document.getElementById("tractionText").textContent=(+traction.value).toFixed(1);
+ document.getElementById("moldText").textContent=mold.value;
+ document.getElementById("rh").textContent=s.height.toFixed(1)+" mm";
+ document.getElementById("ri").textContent=s.ri.toFixed(1)+"°";
+ document.getElementById("vt").textContent=s.vt.toFixed(1)+"°";
+ document.getElementById("apt").textContent=s.ap.toFixed(1)+" mm";
+ document.getElementById("ltt").textContent=s.lat.toFixed(1)+" mm";
 }
+function evaluateReduction(){
+ const s=state();let score=100,msg=[];
+ score-=Math.min(35,Math.max(0,10-s.height)*12);
+ score-=Math.min(20,Math.abs(s.ri-22)*2);
+ score-=Math.min(25,Math.abs(s.vt-11)*1.5);
+ score-=Math.min(10,Math.abs(s.ap)*2);score-=Math.min(10,Math.abs(s.lat)*2);
+ if(+mold.value<30)score-=7;if(+mold.value>85)score-=6;
+ score=Math.max(0,Math.round(score));
+ if(s.height<10)msg.push("Residual shortening: traction/disimpaction 부족.");
+ if(s.ri<18||s.ri>25)msg.push("Radial inclination 교정 필요.");
+ if(s.vt<0||s.vt>15)msg.push("Sagittal tilt 교정 필요.");
+ if(Math.abs(s.ap)>3||Math.abs(s.lat)>3)msg.push("Residual translation 존재.");
+ if(+mold.value<30)msg.push("Molding 부족.");
+ if(!msg.length)msg.push("교육용 목표 alignment에 도달했습니다.");
+ let el=document.getElementById("score");el.textContent=(score>=85?"Excellent":score>=70?"Acceptable":"Needs correction")+": "+score+"/100";
+ el.className="score "+(score>=85?"good":score>=70?"mid":"bad");
+ document.getElementById("feedback").textContent=msg.join(" ");
+}
+function resetReduction(){
+ traction.value=-6;mold.value=0;move.x=move.y=ang.x=ang.y=0;
+ document.getElementById("score").textContent="Not evaluated";
+ document.getElementById("score").className="score bad";
+ document.getElementById("feedback").textContent="";
+ drawAll();
+}
+function randomCase(){
+ currentPattern=Math.floor(Math.random()*patterns.length);
+ const base=patterns[currentPattern].fx;
 
-Object.values(els).forEach(el=>el.addEventListener("input",drawAll));
+ // Small AP variability, larger sagittal variability.
+ const apJitter=(Math.random()-0.5)*2.0;      // ±1 mm
+ const latJitter=(Math.random()-0.5)*4.0;    // ±2 mm
+ const tiltJitter=(Math.random()-0.5)*8.0;   // ±4°
+ const shortJitter=(Math.random()-0.5)*2.0;  // ±1 mm
+ const riJitter=(Math.random()-0.5)*4.0;     // ±2°
+
+ fx={
+   short:Math.max(2,base.short+shortJitter),
+   ap:base.ap+apJitter,
+   lat:base.lat+latJitter,
+   dorsal:base.dorsal+tiltJitter,
+   lossRI:Math.max(2,base.lossRI+riJitter)
+ };
+
+ updatePatternInfo();
+ resetReduction();
+}
+traction.addEventListener("input",drawAll);
+mold.addEventListener("input",drawAll);
+bindPad("movePad",move);
+bindPad("anglePad",ang);
+updatePatternInfo();
 drawAll();
 </script>
 </body>
