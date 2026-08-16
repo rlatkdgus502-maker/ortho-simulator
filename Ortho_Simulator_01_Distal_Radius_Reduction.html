@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Distal Radius Fracture Reduction Simulator</title>
+<style>
+  body { font-family: Arial, "Noto Sans KR", sans-serif; margin:0; background:#f4f6f8; color:#1f2937; }
+  header { background:#111827; color:white; padding:16px 22px; }
+  h1 { margin:0; font-size:22px; }
+  .wrap { display:grid; grid-template-columns: 1.3fr 1fr; gap:16px; padding:16px; }
+  .panel { background:white; border-radius:12px; padding:16px; box-shadow:0 2px 10px rgba(0,0,0,.07); }
+  canvas { width:100%; height:auto; background:#fbfbfb; border:1px solid #d1d5db; border-radius:8px; }
+  .views { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .controls { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  label { display:block; font-size:13px; margin-bottom:4px; font-weight:600; }
+  input[type=range] { width:100%; }
+  .metric { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee; }
+  .score { font-size:28px; font-weight:700; margin-top:12px; }
+  .good { color:#15803d; } .mid { color:#b45309; } .bad { color:#b91c1c; }
+  button { padding:10px 14px; border:none; border-radius:8px; cursor:pointer; font-weight:600; }
+  .primary { background:#2563eb; color:white; }
+  .secondary { background:#e5e7eb; color:#111827; }
+  .tip { font-size:13px; line-height:1.5; color:#4b5563; }
+  .full { grid-column:1 / -1; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Distal Radius Fracture Manual Reduction Simulator</h1>
+</header>
+
+<div class="wrap">
+  <div class="panel">
+    <div class="views">
+      <div>
+        <h3>AP View</h3>
+        <canvas id="ap" width="520" height="520"></canvas>
+      </div>
+      <div>
+        <h3>Lateral View</h3>
+        <canvas id="lat" width="520" height="520"></canvas>
+      </div>
+    </div>
+    <p class="tip">
+      목표: 먼저 shortening을 줄여 disimpaction한 뒤, translation과 angulation을 교정하십시오.
+      단순 wrist flexion만으로는 좋은 score가 나오지 않도록 설계했습니다.
+    </p>
+  </div>
+
+  <div class="panel">
+    <h3>Reduction Maneuver</h3>
+    <div class="controls">
+      <div>
+        <label>Traction / Length restoration: <span id="tractionVal"></span> mm</label>
+        <input id="traction" type="range" min="0" max="12" step="0.5" value="0">
+      </div>
+      <div>
+        <label>Radial-Ulnar translation: <span id="apTransVal"></span> mm</label>
+        <input id="apTrans" type="range" min="-10" max="10" step="0.5" value="0">
+      </div>
+      <div>
+        <label>Volar-Dorsal translation: <span id="latTransVal"></span> mm</label>
+        <input id="latTrans" type="range" min="-10" max="10" step="0.5" value="0">
+      </div>
+      <div>
+        <label>Volar tilt correction: <span id="tiltVal"></span>°</label>
+        <input id="tilt" type="range" min="-35" max="25" step="1" value="0">
+      </div>
+      <div>
+        <label>Radial inclination correction: <span id="riVal"></span>°</label>
+        <input id="ri" type="range" min="-15" max="20" step="1" value="0">
+      </div>
+      <div>
+        <label>3-point molding force: <span id="moldVal"></span>%</label>
+        <input id="mold" type="range" min="0" max="100" step="5" value="0">
+      </div>
+    </div>
+
+    <div style="margin-top:16px;">
+      <button class="primary" onclick="evaluateReduction()">Evaluate reduction</button>
+      <button class="secondary" onclick="resetSim()">Reset</button>
+      <button class="secondary" onclick="randomizeFracture()">Random fracture</button>
+    </div>
+
+    <h3 style="margin-top:20px;">Current Parameters</h3>
+    <div class="metric"><span>Radial height</span><strong id="rh"></strong></div>
+    <div class="metric"><span>Radial inclination</span><strong id="riMetric"></strong></div>
+    <div class="metric"><span>Volar tilt</span><strong id="vt"></strong></div>
+    <div class="metric"><span>AP translation</span><strong id="apt"></strong></div>
+    <div class="metric"><span>Lateral translation</span><strong id="ltt"></strong></div>
+
+    <div id="scoreBox" class="score bad">Not evaluated</div>
+    <div id="feedback" class="tip" style="margin-top:8px;"></div>
+  </div>
+
+  <div class="panel full">
+    <h3>교육용 기준</h3>
+    <div class="tip">
+      이 simulator는 실제 환자 진료용 의사결정 도구가 아니라 reduction 원리를 학습하기 위한 모델입니다.
+      목표 범위는 대략 radial height ≥ 10 mm, radial inclination 18–25°, volar tilt 약 0–15°를 중심으로 설정했습니다.
+      fracture pattern, age, intra-articular involvement 등에 따라 실제 acceptable criteria는 달라질 수 있습니다.
+    </div>
+  </div>
+</div>
+
+<script>
+let fx = {
+  shortening: 8,
+  apTranslation: 5,
+  latTranslation: 6,
+  dorsalTilt: 25,
+  lossRI: 10
+};
+
+const els = {};
+["traction","apTrans","latTrans","tilt","ri","mold"].forEach(id=>els[id]=document.getElementById(id));
+
+function getState(){
+  const traction = +els.traction.value;
+  const apCorr = +els.apTrans.value;
+  const latCorr = +els.latTrans.value;
+  const tiltCorr = +els.tilt.value;
+  const riCorr = +els.ri.value;
+
+  return {
+    radialHeight: 11 - Math.max(0, fx.shortening - traction),
+    radialInclination: 22 - fx.lossRI + riCorr,
+    volarTilt: 11 - fx.dorsalTilt + tiltCorr,
+    apTranslation: fx.apTranslation - apCorr,
+    latTranslation: fx.latTranslation - latCorr,
+    mold: +els.mold.value
+  };
+}
+
+function updateLabels(){
+  document.getElementById("tractionVal").textContent = els.traction.value;
+  document.getElementById("apTransVal").textContent = els.apTrans.value;
+  document.getElementById("latTransVal").textContent = els.latTrans.value;
+  document.getElementById("tiltVal").textContent = els.tilt.value;
+  document.getElementById("riVal").textContent = els.ri.value;
+  document.getElementById("moldVal").textContent = els.mold.value;
+
+  const s = getState();
+  document.getElementById("rh").textContent = s.radialHeight.toFixed(1) + " mm";
+  document.getElementById("riMetric").textContent = s.radialInclination.toFixed(1) + "°";
+  document.getElementById("vt").textContent = s.volarTilt.toFixed(1) + "°";
+  document.getElementById("apt").textContent = s.apTranslation.toFixed(1) + " mm";
+  document.getElementById("ltt").textContent = s.latTranslation.toFixed(1) + " mm";
+}
+
+function drawBone(ctx, view){
+  ctx.clearRect(0,0,520,520);
+  ctx.save();
+  ctx.translate(260,40);
+
+  ctx.strokeStyle="#374151";
+  ctx.lineWidth=18;
+  ctx.lineCap="round";
+
+  // proximal shaft
+  ctx.beginPath();
+  ctx.moveTo(view==="ap" ? -35 : 0, 20);
+  ctx.lineTo(view==="ap" ? -35 : 0, 280);
+  ctx.stroke();
+
+  const s = getState();
+
+  let dx=0, angle=0;
+  if(view==="ap"){
+    dx = s.apTranslation * 6;
+    angle = -(s.radialInclination-22) * Math.PI/180 * 0.9;
+  } else {
+    dx = s.latTranslation * 6;
+    angle = -(s.volarTilt-11) * Math.PI/180 * 0.9;
+  }
+
+  const lengthGain = (s.radialHeight - 3) * 4;
+  ctx.save();
+  ctx.translate(dx, 285 + (32-lengthGain));
+  ctx.rotate(angle);
+
+  ctx.strokeStyle="#9ca3af";
+  ctx.lineWidth=20;
+  ctx.beginPath();
+  ctx.moveTo(0,0);
+  ctx.lineTo(0,120);
+  ctx.stroke();
+
+  ctx.fillStyle="#d1d5db";
+  ctx.beginPath();
+  ctx.ellipse(0,130,48,28,0,0,Math.PI*2);
+  ctx.fill();
+
+  ctx.restore();
+
+  // fracture line
+  ctx.strokeStyle="#ef4444";
+  ctx.lineWidth=3;
+  ctx.beginPath();
+  ctx.moveTo(-55,285);
+  ctx.lineTo(55,285);
+  ctx.stroke();
+
+  ctx.fillStyle="#111827";
+  ctx.font="14px Arial";
+  ctx.fillText(view==="ap" ? "AP" : "Lateral", -230, 430);
+  ctx.restore();
+}
+
+function drawAll(){
+  drawBone(document.getElementById("ap").getContext("2d"),"ap");
+  drawBone(document.getElementById("lat").getContext("2d"),"lat");
+  updateLabels();
+}
+
+function evaluateReduction(){
+  const s = getState();
+  let score=100;
+  score -= Math.min(35, Math.abs(Math.min(0, s.radialHeight-10))*12);
+  score -= Math.min(20, Math.abs(s.radialInclination-22)*2);
+  score -= Math.min(25, Math.abs(s.volarTilt-11)*1.5);
+  score -= Math.min(10, Math.abs(s.apTranslation)*2);
+  score -= Math.min(10, Math.abs(s.latTranslation)*2);
+
+  // reward appropriate molding, penalize under/over molding
+  score -= Math.abs(s.mold-55)*0.12;
+  score = Math.max(0, Math.round(score));
+
+  const box=document.getElementById("scoreBox");
+  const fb=document.getElementById("feedback");
+
+  if(score>=85){
+    box.className="score good";
+    box.textContent="Excellent: "+score+"/100";
+  } else if(score>=70){
+    box.className="score mid";
+    box.textContent="Acceptable: "+score+"/100";
+  } else {
+    box.className="score bad";
+    box.textContent="Needs correction: "+score+"/100";
+  }
+
+  let msgs=[];
+  if(s.radialHeight<10) msgs.push("Residual shortening: traction/disimpaction이 부족합니다.");
+  if(s.radialInclination<18) msgs.push("Radial inclination이 부족합니다.");
+  if(s.radialInclination>25) msgs.push("Radial inclination이 과교정되었습니다.");
+  if(s.volarTilt<0) msgs.push("Residual dorsal tilt가 남아 있습니다.");
+  if(s.volarTilt>15) msgs.push("Volar tilt가 과교정되었습니다.");
+  if(Math.abs(s.apTranslation)>3) msgs.push("AP translation이 남아 있습니다.");
+  if(Math.abs(s.latTranslation)>3) msgs.push("Lateral translation이 남아 있습니다.");
+  if(s.mold<35) msgs.push("Molding이 부족합니다.");
+  if(s.mold>80) msgs.push("과도한 molding pressure를 피하십시오.");
+  if(msgs.length===0) msgs.push("Alignment와 molding이 교육용 목표 범위에 들어왔습니다.");
+  fb.textContent=msgs.join(" ");
+}
+
+function resetSim(){
+  els.traction.value=0;
+  els.apTrans.value=0;
+  els.latTrans.value=0;
+  els.tilt.value=0;
+  els.ri.value=0;
+  els.mold.value=0;
+  document.getElementById("scoreBox").className="score bad";
+  document.getElementById("scoreBox").textContent="Not evaluated";
+  document.getElementById("feedback").textContent="";
+  drawAll();
+}
+
+function randomizeFracture(){
+  fx.shortening = 5 + Math.random()*5;
+  fx.apTranslation = -7 + Math.random()*14;
+  fx.latTranslation = 3 + Math.random()*7;
+  fx.dorsalTilt = 15 + Math.random()*20;
+  fx.lossRI = 6 + Math.random()*10;
+  resetSim();
+}
+
+Object.values(els).forEach(el=>el.addEventListener("input",drawAll));
+drawAll();
+</script>
+</body>
+</html>
